@@ -6,3 +6,4 @@ catalogue-private.pem
 .env
 .env.*
 !.env.example
+.cache/

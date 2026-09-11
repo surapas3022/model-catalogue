@@ -1,39 +1,31 @@
 {
-  "version": 14,
+  "version": 15,
   "channel": "stable",
-  "minClientVersion": 3,
-  "publishedAt": "2026-09-11T04:00:00Z",
+  "minClientVersion": 4,
+  "publishedAt": "2026-09-11T08:00:00Z",
   "usdToThb": 36.5,
   "priceUnit": "1M_tokens",
   "models": {
     "gemini-3.7-flash": {
-      "input": 0.3,
-      "cachedInput": 0.075,
-      "output": 2.5,
+      "price": { "input": 0.3, "cachedInput": 0.075, "output": 2.5 },
       "vision": true,
       "status": "ga",
       "retiresOn": null
     },
     "gemini-3.5-flash-lite": {
-      "input": 0.1,
-      "cachedInput": 0.025,
-      "output": 0.4,
+      "price": { "input": 0.1, "cachedInput": 0.025, "output": 0.4 },
       "vision": true,
       "status": "ga",
       "retiresOn": null
     },
     "gemini-3.1-flash-lite": {
-      "input": 0.1,
-      "cachedInput": 0.025,
-      "output": 0.4,
+      "price": { "input": 0.1, "cachedInput": 0.025, "output": 0.4 },
       "vision": false,
       "status": "deprecated",
       "retiresOn": "2027-03-31"
     },
     "gemini-embedding-001": {
-      "input": 0.15,
-      "cachedInput": 0.15,
-      "output": 0,
+      "price": { "input": 0.15, "cachedInput": 0.15, "output": 0 },
       "vision": false,
       "status": "ga",
       "retiresOn": null

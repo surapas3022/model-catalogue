@@ -15,7 +15,7 @@ Repo: [github.com/surapas3022/model-catalogue](https://github.com/surapas3022/mo
 
 - [`llms.txt`](llms.txt) — URL, public key, กฎ `adopt` / `resolveModel` / `calculateCost`, สิ่งที่ห้ามทำ
 - [`catalogue.schema.json`](catalogue.schema.json) — schema ของ JSON ข้างใน `payload` หลังลายเซ็นผ่าน
-- [`client.mjs`](client.mjs) — implementation อ้างอิง (Node.js 18+)
+- [`client.mjs`](client.mjs) — ตัวอย่างที่ล้มแล้วใช้ cache / FLOOR ไม่ throw ออกจากเส้นทางบูต
 
 อย่าให้เอเจนต์ดึง `catalogue.src.json` มาใช้ตอนรัน — ไฟล์นั้นไม่ได้เซ็น ใช้เฉพาะคนดูแล repo
 
@@ -102,26 +102,22 @@ const signed = await fetch(url).then((res) => {
 ### ขั้นที่ 2 — ตรวจลายเซ็นแล้วรับ catalogue
 
 ```js
-import { adopt, resolveModel, calculateCost, CLIENT_VERSION } from "./client.mjs";
+import { startCatalogue, tryAdopt, resolveModel, calculateCost, catalogue } from "./client.mjs";
 
-const cachedVersion = Number(localStorage.getItem("catalogueVersion") ?? 0);
-const catalogue = adopt(signed, cachedVersion);
-
-localStorage.setItem("catalogueVersion", String(catalogue.version));
-localStorage.setItem("catalogue", JSON.stringify(catalogue));
+await startCatalogue(); // บูต: cache → ดึงซอง → ล้มแล้วใช้ FLOOR ไม่ throw
+const cat = catalogue();
 ```
 
-`adopt()` จะ throw เมื่อ:
+`adopt()` ยัง throw เพื่อบอกสาเหตุ แต่เส้นทางบูตให้เรียก `tryAdopt()` / `startCatalogue()` ซึ่งจับไว้แล้วใช้ของเดิม
 
-| สาเหตุ | ความหมาย |
-|---|---|
-| `catalogue signature is invalid` | ไฟล์ถูกแก้ / คนละคีย์ |
-| `version ... is not newer than cached` | ซ้ำหรือเก่ากว่าของที่เก็บไว้ |
-| `client version ... is below ... minClientVersion` | แอปต้องอัปเดตก่อน |
+| สาเหตุ | ความหมาย | ตัวอย่างไคลเอนต์ทำอะไร |
+|---|---|---|
+| ลายเซ็นไม่ผ่าน | ไฟล์ถูกแก้ / คนละคีย์ | ใช้ cache หรือ FLOOR |
+| version ไม่ใหม่กว่า | ซ้ำหรือเก่ากว่าของที่เก็บไว้ | ใช้ของเดิม |
+| `minClientVersion` สูงเกิน | แอปต้องอัปเดตก่อน | ใช้ของเดิม |
+| `channel` ไม่ตรง | ดึง canary มาใส่ build ที่เป็น stable | ใช้ของเดิม |
 
-ถ้า throw ให้ใช้ catalogue เก่าที่ cache ไว้ต่อ อย่าใช้ payload ที่ตรวจไม่ผ่าน
-
-ครั้งแรกที่ยังไม่มี cache ให้ส่ง `cachedVersion = 0`
+ครั้งแรกที่ยังไม่มี cache ตัวพื้น `FLOOR` (`version: 0`) ตอบได้ทันที
 
 ### ขั้นที่ 3 — เลือกโมเดลตาม feature
 
@@ -152,7 +148,7 @@ const { modelId, model, fallbackUsed } = resolveModel(catalogue, "order-slip-ocr
 
 ### ขั้นที่ 4 — คิดราคา Token
 
-ราคาใน catalogue เป็น **USD ต่อ 1 ล้าน token** (`priceUnit: "1M_tokens"`)
+ราคาต่อรุ่นอยู่ที่ **`models.<id>.price`** เป็น USD ต่อ 1 ล้าน token (`priceUnit: "1M_tokens"`) ไม่ใช่ฟิลด์ `input` แบนบนตัวโมเดล
 
 ```js
 const cost = calculateCost(catalogue, modelId, {
@@ -179,15 +175,16 @@ thb = usd * usdToThb
 
 ### วงจรแนะนำใน production
 
-1. ตอนบูตแอป: ใช้ catalogue ที่ cache ไว้ทันที (อย่ารอเครือข่าย)
-2. พื้นหลัง: `fetch` ซองใหม่ → `adopt(signed, cachedVersion)`
+1. ตอนบูต: ใช้ `FLOOR` หรือ catalogue ที่ cache ไว้ทันที (อย่ารอเครือข่าย)
+2. พื้นหลัง: `fetch` ซองใหม่ → `tryAdopt(signed)`
 3. ผ่านแล้วค่อยสลับโมเดล / อัตราแลกเปลี่ยน
-4. ไม่ผ่านแล้วเงียบ ๆ ใช้ของเก่า
+4. ไม่ผ่านแล้วเงียบ ๆ ใช้ของเก่า — ห้ามให้การถามโมเดลทำให้แอปพัง
 
 รันตัวอย่างใน repo นี้:
 
 ```bash
 node client.mjs
+node verify.mjs
 ```
 
 ---
@@ -203,9 +200,11 @@ node client.mjs
 | `catalogue.src.json` | คน | ต้นทางที่แก้ด้วยมือ |
 | `catalogue-private.pem` | เครื่อง / GitHub Secret | ห้ามขึ้น Git |
 | `catalogue-public.pem` | คน (อ่านอย่างเดียว) | คู่กับที่ฝังในแอป |
+| `catalogue.schema.json` | คน | รูปร่าง payload — `build.mjs` บังคับใช้ก่อนเซ็น |
 | `config.stable.json` | CI | ไฟล์ที่ร้านค้าดึง |
-| `config.canary.json` | CI | ช่องทดลอง |
-| `client.mjs` | แอปร้านค้า | ตัวอย่างการตรวจลายเซ็น |
+| `config.canary.json` | คนกด workflow | ช่องทดลอง ไม่เซ็นอัตโนมัติพร้อม stable |
+| `verify.mjs` | CI | พิสูจน์ลายเซ็นและการ์ดของ build |
+| `client.mjs` | แอปร้านค้า | ตัวอย่างตรวจลายเซ็น + FLOOR |
 
 ### สร้างคีย์ครั้งแรก (ทำแล้วใน repo นี้)
 
@@ -234,6 +233,7 @@ node build.mjs --keygen
 | `channel` | `stable` หรือ `canary` |
 | `minClientVersion` | แอปที่ต่ำกว่านี้ใช้ catalogue นี้ไม่ได้ |
 | `usdToThb` | อัตราแปลงตอนคิดเงินบาท |
+| `models.*.price` | `{ input, cachedInput, output }` ต่อรุ่น |
 | `models.*.retiresOn` | `YYYY-MM-DD` หรือ `null` |
 | `purposes.default` | **ต้องมีเสมอ** และห้ามเป็นอาร์เรย์ว่าง |
 | `fallbackPrice` | ราคาสำรองเมื่อไม่รู้จัก model id |
@@ -250,8 +250,10 @@ node build.mjs --keygen
 
 ```bash
 node build.mjs --channel stable
-node build.mjs --channel canary
+node verify.mjs
 node client.mjs
+# canary เมื่อต้องการทดลองจริง ไม่ใช่ทุกครั้งที่ปล่อย stable
+node build.mjs --channel canary
 ```
 
 Private key อ่านจาก:
@@ -271,17 +273,19 @@ Private key อ่านจาก:
 
 Workflow `.github/workflows/publish.yml` จะ:
 
-- เซ็น `config.stable.json` และ `config.canary.json`
-- commit กลับเข้า repo
-- ยิง purge ไปที่ jsDelivr
+- เซ็นเฉพาะ `config.stable.json` เมื่อ `catalogue.src.json` เปลี่ยน
+- รัน `verify.mjs` ทุกครั้ง
+- commit กลับเข้า repo แล้ว purge jsDelivr
+
+Canary ไม่ถูกเซ็นจาก source เดียวกับ stable ในรอบเดียวกัน — กด **Run workflow** แล้วเลือก `canary`
 
 จะรันเมื่อไฟล์เหล่านี้เปลี่ยนบน `main`:
 
 - `catalogue.src.json`
+- `catalogue.schema.json`
 - `build.mjs`
+- `verify.mjs`
 - `.github/workflows/publish.yml`
-
-หรือกด **Run workflow** เองได้ (`workflow_dispatch`)
 
 หลัง Actions เขียว รอ cache สั้น ๆ แล้วเปิด URL jsDelivr ด้านบน ควรได้ `version` ใหม่
 
@@ -313,7 +317,7 @@ Workflow `.github/workflows/publish.yml` จะ:
 | ร้านค้าไม่ยอมรับไฟล์ใหม่ | ลืมบวก `version` |
 | Actions ล้มที่ Missing secret | ยังไม่มี `CATALOGUE_PRIVATE_KEY` |
 | jsDelivr ยังเป็นของเก่า | cache ยังไม่หมด ดูว่าขั้น Purge ใน Actions ผ่านหรือยัง |
-| `no usable (non-retired) model` | โมเดลใน purpose หมดอายุหมด และ default ก็ใช้ไม่ได้ |
+| แอปไม่มีโมเดลใช้ | โมเดลใน purpose หมดอายุหมด — ตัวอย่างไคลเอนต์ตกลง FLOOR |
 | `minClientVersion` error | แอปร้านค้า `CLIENT_VERSION` ต่ำกว่าที่ catalogue กำหนด |
 
 ---
@@ -325,5 +329,6 @@ npm run keygen         # สร้างคู่คีย์ Ed25519
 npm run build          # เซ็นตาม channel ใน catalogue.src.json
 npm run build:stable
 npm run build:canary
+npm run verify
 npm run client         # เดโม adopt + resolve + คิดราคา
 ```

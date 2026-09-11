@@ -1,3 +1,8 @@
+# Signs the catalogue and puts it where deployments fetch it.
+#
+# Only `stable` publishes automatically. Signing canary from the same source in
+# the same run would make it identical to stable but for the channel stamp, so
+# it cannot break first. Stage a canary with "Run workflow" and pick the channel.
 name: Publish Signed Catalogue
 
 on:
@@ -6,21 +11,36 @@ on:
       - main
     paths:
       - catalogue.src.json
+      - catalogue.schema.json
       - build.mjs
+      - verify.mjs
       - .github/workflows/publish.yml
   workflow_dispatch:
+    inputs:
+      channel:
+        description: Channel to sign
+        type: choice
+        default: stable
+        options: [stable, canary]
 
 permissions:
   contents: write
+
+concurrency:
+  group: publish-catalogue
+  cancel-in-progress: false
 
 jobs:
   publish:
     name: Sign and publish catalogue
     runs-on: ubuntu-latest
+    env:
+      CHANNEL: ${{ github.event.inputs.channel || 'stable' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
+          fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
@@ -28,44 +48,79 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Build signed config
+      - name: Check the signing key is present
         env:
           CATALOGUE_KEY: ${{ secrets.CATALOGUE_PRIVATE_KEY }}
         run: |
           set -euo pipefail
           if [ -z "${CATALOGUE_KEY:-}" ]; then
-            echo "Missing secrets.CATALOGUE_PRIVATE_KEY"
+            echo "::error::secrets.CATALOGUE_PRIVATE_KEY is not set. Paste the whole private PEM into it, BEGIN and END lines included."
             exit 1
           fi
-          node build.mjs --channel stable
-          node build.mjs --channel canary
 
-      - name: Commit published configs
+      - name: Decide whether there is anything to sign
+        id: decide
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add config.stable.json config.canary.json
-          if git diff --cached --quiet; then
-            echo "No catalogue changes to publish"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "sign=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          git commit -m "chore: publish signed catalogue"
+          BEFORE="${{ github.event.before }}"
+          if [ -z "$BEFORE" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --name-only "$BEFORE" "${{ github.sha }}" | grep -qx 'catalogue.src.json'; then
+            SRC_VER="$(node -e 'console.log(JSON.parse(require("fs").readFileSync("catalogue.src.json","utf8")).version)')"
+            PUB_FILE="config.${CHANNEL}.json"
+            if [ -f "$PUB_FILE" ]; then
+              PUB_VER="$(node -e 'const e=JSON.parse(require("fs").readFileSync(process.argv[1],"utf8")); console.log(JSON.parse(e.payload).version)' "$PUB_FILE")"
+              if [ "$SRC_VER" = "$PUB_VER" ]; then
+                echo "sign=false" >> "$GITHUB_OUTPUT"
+                echo "source version ${SRC_VER} is already in ${PUB_FILE}; verifying only."
+                exit 0
+              fi
+            fi
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+            echo "catalogue.src.json did not change in this push; verifying only."
+          fi
+
+      - name: Sign
+        if: steps.decide.outputs.sign == 'true'
+        env:
+          CATALOGUE_KEY: ${{ secrets.CATALOGUE_PRIVATE_KEY }}
+        run: node build.mjs --channel "$CHANNEL"
+
+      - name: Verify
+        env:
+          CATALOGUE_KEY: ${{ secrets.CATALOGUE_PRIVATE_KEY }}
+        run: node verify.mjs
+
+      - name: Commit published config
+        id: commit
+        if: steps.decide.outputs.sign == 'true'
+        run: |
+          set -euo pipefail
+          git config user.name "surapas3022"
+          git config user.email "surapas3022@gmail.com"
+          git add "config.${CHANNEL}.json"
+          if git diff --cached --quiet; then
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            echo "Nothing changed in config.${CHANNEL}.json."
+            exit 0
+          fi
+          git commit -m "Publish catalogue on ${CHANNEL}"
           git push
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
 
       - name: Purge jsDelivr CDN cache
+        if: steps.commit.outputs.pushed == 'true'
         run: |
           set -euo pipefail
           REPO="${{ github.repository }}"
-          FILES=(
-            "config.stable.json"
-            "config.canary.json"
-          )
-          for FILE in "${FILES[@]}"; do
-            echo "Purging gh/${REPO}@main/${FILE}"
-            curl -fsS "https://purge.jsdelivr.net/gh/${REPO}@main/${FILE}"
-            echo
-            echo "Purging gh/${REPO}/${FILE}"
-            curl -fsS "https://purge.jsdelivr.net/gh/${REPO}/${FILE}"
-            echo
-          done
+          FILE="config.${CHANNEL}.json"
+          curl -fsS "https://purge.jsdelivr.net/gh/${REPO}@main/${FILE}" || echo "::warning::purge failed for @main/${FILE}"
+          curl -fsS "https://purge.jsdelivr.net/gh/${REPO}/${FILE}" || echo "::warning::purge failed for ${FILE}"

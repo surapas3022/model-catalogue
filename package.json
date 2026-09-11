@@ -1,6 +1,6 @@
 {
   "name": "model-catalogue",
-  "version": "14.0.0",
+  "version": "15.0.0",
   "private": true,
   "description": "Zero-Trust signed remote config catalogue for AI model routing and token pricing",
   "type": "module",
@@ -12,6 +12,7 @@
     "build": "node build.mjs",
     "build:stable": "node build.mjs --channel stable",
     "build:canary": "node build.mjs --channel canary",
+    "verify": "node verify.mjs",
     "client": "node client.mjs"
   }
 }
