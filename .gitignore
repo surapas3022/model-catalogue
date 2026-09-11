@@ -1,0 +1,8 @@
+node_modules/
+catalogue-private.pem
+*.pem
+!catalogue-public.pem
+.DS_Store
+.env
+.env.*
+!.env.example

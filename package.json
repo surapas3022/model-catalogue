@@ -1,0 +1,17 @@
+{
+  "name": "model-catalogue",
+  "version": "14.0.0",
+  "private": true,
+  "description": "Zero-Trust signed remote config catalogue for AI model routing and token pricing",
+  "type": "module",
+  "engines": {
+    "node": ">=18.19.0"
+  },
+  "scripts": {
+    "keygen": "node build.mjs --keygen",
+    "build": "node build.mjs",
+    "build:stable": "node build.mjs --channel stable",
+    "build:canary": "node build.mjs --channel canary",
+    "client": "node client.mjs"
+  }
+}

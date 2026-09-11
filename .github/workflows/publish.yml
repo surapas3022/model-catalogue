@@ -1,0 +1,71 @@
+name: Publish Signed Catalogue
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - catalogue.src.json
+      - build.mjs
+      - .github/workflows/publish.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Sign and publish catalogue
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build signed config
+        env:
+          CATALOGUE_KEY: ${{ secrets.CATALOGUE_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CATALOGUE_KEY:-}" ]; then
+            echo "Missing secrets.CATALOGUE_PRIVATE_KEY"
+            exit 1
+          fi
+          node build.mjs --channel stable
+          node build.mjs --channel canary
+
+      - name: Commit published configs
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add config.stable.json config.canary.json
+          if git diff --cached --quiet; then
+            echo "No catalogue changes to publish"
+            exit 0
+          fi
+          git commit -m "chore: publish signed catalogue"
+          git push
+
+      - name: Purge jsDelivr CDN cache
+        run: |
+          set -euo pipefail
+          REPO="${{ github.repository }}"
+          FILES=(
+            "config.stable.json"
+            "config.canary.json"
+          )
+          for FILE in "${FILES[@]}"; do
+            echo "Purging gh/${REPO}@main/${FILE}"
+            curl -fsS "https://purge.jsdelivr.net/gh/${REPO}@main/${FILE}"
+            echo
+            echo "Purging gh/${REPO}/${FILE}"
+            curl -fsS "https://purge.jsdelivr.net/gh/${REPO}/${FILE}"
+            echo
+          done
