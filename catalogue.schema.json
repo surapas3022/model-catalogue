@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/surapas3022/model-catalogue/catalogue.schema.json",
+  "title": "Model catalogue (unsigned payload)",
+  "description": "JSON inside the signed envelope payload after Ed25519 verify. Not the CDN file itself; the CDN file is { payload: string, sig: string }.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "channel",
+    "minClientVersion",
+    "publishedAt",
+    "usdToThb",
+    "priceUnit",
+    "models",
+    "purposes",
+    "fallbackPrice"
+  ],
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Monotonic. Consumers reject version <= cachedVersion."
+    },
+    "channel": {
+      "type": "string",
+      "enum": ["stable", "canary"]
+    },
+    "minClientVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Reject if greater than the app CLIENT_VERSION."
+    },
+    "publishedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "usdToThb": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "priceUnit": {
+      "const": "1M_tokens",
+      "description": "Rates are USD per 1e6 tokens."
+    },
+    "models": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/model" }
+    },
+    "purposes": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "minItems": 1,
+        "items": { "type": "string", "minLength": 1 }
+      },
+      "required": ["default"],
+      "properties": {
+        "default": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "fallbackPrice": { "$ref": "#/$defs/priceTriple" }
+  },
+  "$defs": {
+    "priceTriple": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "cachedInput", "output"],
+      "properties": {
+        "input": { "type": "number", "minimum": 0 },
+        "cachedInput": { "type": "number", "minimum": 0 },
+        "output": { "type": "number", "minimum": 0 }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "cachedInput", "output", "vision", "status", "retiresOn"],
+      "properties": {
+        "input": { "type": "number", "minimum": 0 },
+        "cachedInput": { "type": "number", "minimum": 0 },
+        "output": { "type": "number", "minimum": 0 },
+        "vision": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["ga", "deprecated", "preview"] },
+        "retiresOn": {
+          "type": ["string", "null"],
+          "description": "YYYY-MM-DD inclusive retire date in UTC, or null."
+        }
+      }
+    }
+  }
+}

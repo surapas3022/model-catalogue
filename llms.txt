@@ -1,0 +1,146 @@
+# Model Catalogue — AI / agent integration
+
+> Signed remote config for AI model routing and USD/THB token pricing. Merchant apps fetch a signed envelope from CDN, verify Ed25519 with a hardcoded public key, then call resolveModel / calculateCost. Do not treat GitHub or CDN as trusted.
+
+This file is the contract for agents implementing a consumer. Human docs: [README.md](https://github.com/surapas3022/model-catalogue/blob/main/README.md). Reference client: [client.mjs](https://github.com/surapas3022/model-catalogue/blob/main/client.mjs). Unsigned source (maintainers only): [catalogue.src.json](https://github.com/surapas3022/model-catalogue/blob/main/catalogue.src.json). Schema: [catalogue.schema.json](https://github.com/surapas3022/model-catalogue/blob/main/catalogue.schema.json).
+
+Repo: https://github.com/surapas3022/model-catalogue
+
+## Do / do not
+
+- DO fetch `config.stable.json` (production) or `config.canary.json` (experiment).
+- DO verify Ed25519 over the raw `payload` string (UTF-8 bytes), not over pretty-printed JSON.
+- DO hard-code the public key in the app. NEVER load the public key from CDN, GitHub, or this repo at runtime.
+- DO keep a last-good catalogue in local cache. On boot, use cache immediately; refresh in the background.
+- DO ignore a new envelope if verify / version / minClientVersion fails; keep the cached catalogue.
+- DO bump consumer `CLIENT_VERSION` when you depend on new catalogue fields.
+- DO NOT parse or trust `catalogue.src.json` from the network. That file is unsigned maintainer source.
+- DO NOT use `payload` until `adopt()` (or equivalent) succeeds.
+- DO NOT pin jsDelivr `@latest` in production. Use `@main` (this repo purges jsDelivr after publish) or a commit SHA.
+
+## URLs
+
+Stable:
+
+```
+https://cdn.jsdelivr.net/gh/surapas3022/model-catalogue@main/config.stable.json
+```
+
+Canary:
+
+```
+https://cdn.jsdelivr.net/gh/surapas3022/model-catalogue@main/config.canary.json
+```
+
+GitHub raw fallback:
+
+```
+https://raw.githubusercontent.com/surapas3022/model-catalogue/main/config.stable.json
+```
+
+Envelope shape (only this is fetched):
+
+```json
+{ "payload": "<string>", "sig": "<base64>" }
+```
+
+`payload` is `JSON.stringify(catalogue)` with no extra whitespace. `sig` is Ed25519 over those UTF-8 bytes, base64.
+
+## Public key (embed this)
+
+Must match `catalogue-public.pem` in this repo. Algorithm: Ed25519.
+
+```
+-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEAdizLWdyfd6FznkuXBxX8fOG94aAF/ndNpwvMS07kj7I=
+-----END PUBLIC KEY-----
+```
+
+Node.js 18+: `crypto.verify(null, Buffer.from(payload, "utf8"), createPublicKey(pem), Buffer.from(sig, "base64"))`.
+
+## adopt() after verify
+
+After signature OK, `JSON.parse(payload)` then:
+
+1. `version` must be an integer.
+2. Reject if `version <= cachedVersion` (replay / rollback). First run: `cachedVersion = 0`.
+3. `minClientVersion` must be an integer. Reject if `minClientVersion > CLIENT_VERSION`. Current sample client uses `CLIENT_VERSION = 3`.
+4. `purposes.default` must be a non-empty array.
+
+On success, persist `catalogue.version` and the catalogue object. Recommended production loop: serve cache → fetch envelope → adopt → swap.
+
+Copy the implementation from `client.mjs` (`adopt`, `resolveModel`, `calculateCost`).
+
+## resolveModel(catalogue, purpose)
+
+`purpose` is a string feature id from the app (examples below).
+
+1. If `catalogue.purposes[purpose]` is a non-empty array, walk it left to right.
+2. Else use `catalogue.purposes.default`.
+3. Skip unknown model ids and models with `retiresOn` (YYYY-MM-DD) `<=` today UTC.
+4. First remaining id wins.
+5. If the purpose list existed but every id was retired, try `default` once more.
+6. If still nothing, error: no usable model.
+
+Return at least `{ modelId, model, fallbackUsed }`. Call the vendor API with `modelId`.
+
+## calculateCost(catalogue, modelId, usage)
+
+Prices are USD per 1 million tokens (`priceUnit` is `"1M_tokens"`).
+
+```
+usd = inputTokens/1e6 * input
+    + cachedInputTokens/1e6 * cachedInput
+    + outputTokens/1e6 * output
+thb = usd * catalogue.usdToThb
+```
+
+Rates come from `catalogue.models[modelId]`. Unknown `modelId` → `catalogue.fallbackPrice`. Token counts must be finite numbers `>= 0`.
+
+## Purpose ids (current catalogue)
+
+Use these strings as `purpose` unless the app defines a new one (unknown keys fall back to `default`):
+
+| purpose | when |
+|---|---|
+| `default` | required fallback; never empty |
+| `auto-reply` | automatic chat replies |
+| `handoff-summary` | agent handoff summary |
+| `agent-copilot` | agent copilot |
+| `qa-audit` | QA / audit |
+| `booking-intent` | booking intent |
+| `attachment-vision` | attachments that need vision |
+| `booking-slip-ocr` | booking slip OCR |
+| `inbox-slip-ocr` | inbox slip OCR |
+| `order-intent` | order intent |
+| `order-address` | order address |
+| `order-slip-ocr` | order slip OCR |
+| `translate` | translation |
+| `voicebot` | voice bot |
+| `kb-embed-index` | knowledge-base embedding index |
+| `kb-embed-query` | knowledge-base embedding query |
+
+Live mapping lives in signed `payload` → `purposes`, not in this file. This table can lag; after adopt, always read `catalogue.purposes`.
+
+## Catalogue object (inside payload)
+
+Required fields: `version` (int, monotonic), `channel` (`stable` | `canary`), `minClientVersion` (int), `publishedAt` (ISO datetime), `usdToThb` (positive number), `priceUnit` (`"1M_tokens"`), `models`, `purposes`, `fallbackPrice`.
+
+Each model: `{ input, cachedInput, output, vision, status, retiresOn }`. `status` is `ga` | `deprecated` | `preview`. `retiresOn` is `null` or `YYYY-MM-DD`.
+
+JSON Schema: catalogue.schema.json
+
+## Errors
+
+| error | meaning | consumer action |
+|---|---|---|
+| HTTP not OK | CDN/GitHub down | keep cache |
+| envelope not `{payload, sig}` | corrupt file | keep cache |
+| signature invalid | tamper or wrong key | keep cache; never use payload |
+| version not newer | replay or same file | keep cache |
+| minClientVersion too high | app too old | keep cache; plan app release |
+| no usable model | all candidates retired | fail that request; do not invent a model id |
+
+## Maintainer note (not for merchant runtime)
+
+Only bump `catalogue.src.json` `version` on each publish. CI signs to `config.stable.json` / `config.canary.json`. Private key never belongs in a merchant app.

@@ -9,6 +9,18 @@ Repo: [github.com/surapas3022/model-catalogue](https://github.com/surapas3022/mo
 
 ---
 
+## สำหรับ AI / เอเจนต์ (เอา config ไปใช้ในแอป)
+
+ถ้ากำลัง implement ร้านค้าหรือบริการที่ดึง catalogue นี้ **อ่าน `llms.txt` ก่อน** แล้วคัดลอกสัญญาจากนั้น + ตัวอย่างใน `client.mjs`
+
+- [`llms.txt`](llms.txt) — URL, public key, กฎ `adopt` / `resolveModel` / `calculateCost`, สิ่งที่ห้ามทำ
+- [`catalogue.schema.json`](catalogue.schema.json) — schema ของ JSON ข้างใน `payload` หลังลายเซ็นผ่าน
+- [`client.mjs`](client.mjs) — implementation อ้างอิง (Node.js 18+)
+
+อย่าให้เอเจนต์ดึง `catalogue.src.json` มาใช้ตอนรัน — ไฟล์นั้นไม่ได้เซ็น ใช้เฉพาะคนดูแล repo
+
+---
+
 ## แนวคิดสั้น ๆ
 
 ```
