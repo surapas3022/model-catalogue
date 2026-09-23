@@ -1,57 +1,69 @@
 {
-  "version": 15,
+  "version": 16,
   "channel": "stable",
   "minClientVersion": 4,
-  "publishedAt": "2026-09-11T08:00:00Z",
+  "publishedAt": "2026-09-23T08:00:00Z",
   "usdToThb": 36.5,
   "priceUnit": "1M_tokens",
   "models": {
+    "gemini-3.8-flash": {
+      "price": { "input": 0.75, "cachedInput": 0.075, "output": 3.75 },
+      "vision": true,
+      "status": "ga",
+      "retiresOn": null
+    },
     "gemini-3.7-flash": {
-      "price": { "input": 0.3, "cachedInput": 0.075, "output": 2.5 },
+      "price": { "input": 0.75, "cachedInput": 0.075, "output": 3.75 },
       "vision": true,
       "status": "ga",
       "retiresOn": null
     },
     "gemini-3.5-flash-lite": {
-      "price": { "input": 0.1, "cachedInput": 0.025, "output": 0.4 },
+      "price": { "input": 0.3, "cachedInput": 0.03, "output": 2.5 },
       "vision": true,
       "status": "ga",
       "retiresOn": null
     },
     "gemini-3.1-flash-lite": {
-      "price": { "input": 0.1, "cachedInput": 0.025, "output": 0.4 },
-      "vision": false,
+      "price": { "input": 0.25, "cachedInput": 0.025, "output": 1.5 },
+      "vision": true,
       "status": "deprecated",
-      "retiresOn": "2027-03-31"
+      "retiresOn": "2027-05-07"
+    },
+    "gemini-embedding-2": {
+      "price": { "input": 0.2, "cachedInput": 0.2, "output": 0 },
+      "vision": true,
+      "status": "ga",
+      "retiresOn": null
     },
     "gemini-embedding-001": {
       "price": { "input": 0.15, "cachedInput": 0.15, "output": 0 },
       "vision": false,
-      "status": "ga",
-      "retiresOn": null
+      "status": "deprecated",
+      "retiresOn": "2028-05-14"
     }
   },
   "purposes": {
     "default": ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
-    "auto-reply": ["gemini-3.7-flash", "gemini-3.5-flash-lite"],
+    "auto-reply": ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash-lite"],
     "handoff-summary": ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
-    "agent-copilot": ["gemini-3.7-flash", "gemini-3.5-flash-lite"],
+    "agent-copilot": ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash-lite"],
     "qa-audit": ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
     "booking-intent": ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
-    "attachment-vision": ["gemini-3.7-flash", "gemini-3.5-flash-lite"],
-    "booking-slip-ocr": ["gemini-3.7-flash", "gemini-3.5-flash-lite"],
-    "inbox-slip-ocr": ["gemini-3.7-flash", "gemini-3.5-flash-lite"],
+    "attachment-vision": ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash-lite"],
+    "booking-slip-ocr": ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash-lite"],
+    "inbox-slip-ocr": ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash-lite"],
     "order-intent": ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
     "order-address": ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"],
-    "order-slip-ocr": ["gemini-3.7-flash", "gemini-3.5-flash-lite"],
+    "order-slip-ocr": ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash-lite"],
     "translate": ["gemini-3.5-flash-lite"],
-    "voicebot": ["gemini-3.7-flash", "gemini-3.5-flash-lite"],
-    "kb-embed-index": ["gemini-embedding-001"],
-    "kb-embed-query": ["gemini-embedding-001"]
+    "voicebot": ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash-lite"],
+    "kb-embed-index": ["gemini-embedding-2", "gemini-embedding-001"],
+    "kb-embed-query": ["gemini-embedding-2", "gemini-embedding-001"]
   },
   "fallbackPrice": {
     "input": 0.3,
-    "cachedInput": 0.075,
+    "cachedInput": 0.03,
     "output": 2.5
   }
 }

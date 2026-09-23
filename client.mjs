@@ -31,20 +31,20 @@ export const FLOOR = {
   priceUnit: "1M_tokens",
   models: {
     "gemini-3.5-flash-lite": {
-      price: { input: 0.1, cachedInput: 0.025, output: 0.4 },
+      price: { input: 0.3, cachedInput: 0.03, output: 2.5 },
       vision: true,
       status: "ga",
       retiresOn: null,
     },
     "gemini-3.1-flash-lite": {
-      price: { input: 0.1, cachedInput: 0.025, output: 0.4 },
-      vision: false,
-      status: "ga",
-      retiresOn: null,
+      price: { input: 0.25, cachedInput: 0.025, output: 1.5 },
+      vision: true,
+      status: "deprecated",
+      retiresOn: "2027-05-07",
     },
   },
   purposes: { default: ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"] },
-  fallbackPrice: { input: 0.3, cachedInput: 0.075, output: 2.5 },
+  fallbackPrice: { input: 0.3, cachedInput: 0.03, output: 2.5 },
 };
 
 let current = FLOOR;

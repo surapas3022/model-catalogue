@@ -241,7 +241,7 @@ node build.mjs --keygen
 ลำดับในอาร์เรย์ purpose คือลำดับ fallback เช่น
 
 ```json
-"auto-reply": ["gemini-3.7-flash", "gemini-3.5-flash-lite"]
+"auto-reply": ["gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.5-flash-lite"]
 ```
 
 หมายถึง ใช้ flash ก่อน ถ้าหมดอายุค่อยไป lite
